@@ -31,6 +31,9 @@ fn clear_all(pool: State<'_, Arc<DbPool>>) -> Result<(), String> {
     db::clear_all(&pool)
 }
 
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+
 #[tauri::command]
 fn get_network_info() -> Result<String, String> {
     match local_ip_address::local_ip() {
@@ -67,7 +70,32 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 server::start_server(pool, 14201).await;
             });
-            
+
+            // Set up System Tray
+            let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let generate_i = MenuItem::with_id(app, "generate", "Generate from Clipboard", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&generate_i, &quit_i])?;
+
+            let tray = TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(&menu)
+                .menu_on_left_click(true)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "quit" => {
+                        std::process::exit(0);
+                    }
+                    "generate" => {
+                        let _ = app.emit("quick-generate", ());
+                        // Also show the window if it was hidden
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    _ => {}
+                })
+                .build(app)?;
+
             Ok(())
         })
         .run(tauri::generate_context!())

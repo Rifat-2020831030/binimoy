@@ -10,6 +10,51 @@
   import HistoryPanel from '$lib/components/history/HistoryPanel.svelte';
   import PairingModal from '$lib/components/shared/PairingModal.svelte';
   import { ui } from '$lib/state/ui.svelte';
+  import { history } from '$lib/state/history.svelte';
+  import { toaster } from '$lib/state/toast.svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import { listen } from '@tauri-apps/api/event';
+  import { readText } from '@tauri-apps/plugin-clipboard-manager';
+  import { getInputType } from '$lib/utils/validate';
+  import { DEFAULT_QR_OPTIONS, type QREntry } from '$lib/types';
+
+  let unlistenQuickGenerate: () => void;
+
+  onMount(async () => {
+    unlistenQuickGenerate = await listen('quick-generate', async () => {
+      try {
+        const text = await readText();
+        if (!text) {
+          toaster.info('Clipboard is empty');
+          return;
+        }
+
+        const inputType = getInputType(text);
+        if (inputType === 'empty' || inputType === 'too-long') {
+          toaster.error('Clipboard content is invalid for QR code');
+          return;
+        }
+
+        const entry: QREntry = {
+          id: crypto.randomUUID(),
+          url: text.trim(),
+          createdAt: Date.now(),
+          pinned: false,
+          options: { ...DEFAULT_QR_OPTIONS }
+        };
+
+        await history.add(entry);
+        ui.selectedId = entry.id;
+        toaster.success('Generated from clipboard');
+      } catch (e) {
+        toaster.error('Failed to read clipboard');
+      }
+    });
+  });
+
+  onDestroy(() => {
+    if (unlistenQuickGenerate) unlistenQuickGenerate();
+  });
 
   function handleKeydown(e: KeyboardEvent) {
     // Global Ctrl+F / Cmd+F to focus search
