@@ -1,35 +1,36 @@
 <script lang="ts">
-  // Binimoy — main page (SPA, single route)
-  // Components will be added in subsequent steps
+  import AppShell from '$lib/components/layout/AppShell.svelte';
+  import Toast from '$lib/components/shared/Toast.svelte';
+  import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
+  
+  import InputPanel from '$lib/components/generator/InputPanel.svelte';
+  import QRPreview from '$lib/components/generator/QRPreview.svelte';
+  import OptionsDrawer from '$lib/components/generator/OptionsDrawer.svelte';
+
+  // We'll add the HistoryPanel components in Step 6
 </script>
 
-<div class="flex h-screen w-screen bg-surface-0">
-  <!-- LEFT PANEL — Generator -->
-  <aside class="flex w-[400px] shrink-0 flex-col border-r border-border bg-surface-0 p-6 overflow-y-auto">
-    <div class="mb-6">
+<Toast />
+
+<!-- We'll mount ConfirmDialog globally or in the history panel later when deleting -->
+
+<AppShell>
+  {#snippet leftPanel()}
+    <div class="mb-2">
       <h1 class="text-xl font-semibold text-text-base tracking-tight">Binimoy</h1>
-      <p class="text-xs text-text-faint mt-0.5">QR Code Generator</p>
+      <p class="text-xs text-text-muted mt-0.5">Cross-platform QR Generator</p>
     </div>
 
-    <!-- InputPanel, QRPreview, OptionsDrawer will go here -->
-    <div class="flex-1 flex items-center justify-center">
-      <div class="text-center text-text-faint">
-        <div class="text-4xl mb-3 opacity-30">⬚</div>
-        <p class="text-sm">Generator panel</p>
-        <p class="text-xs mt-1">Coming in Step 5</p>
-      </div>
-    </div>
-  </aside>
+    <InputPanel />
+    <QRPreview />
+    <OptionsDrawer />
+  {/snippet}
 
-  <!-- RIGHT PANEL — History -->
-  <main class="flex flex-1 flex-col bg-surface-0 overflow-hidden">
-    <!-- SearchBar, Toolbar, HistoryItem list will go here -->
-    <div class="flex-1 flex items-center justify-center">
-      <div class="text-center text-text-faint">
-        <div class="text-4xl mb-3 opacity-30">📋</div>
-        <p class="text-sm">History panel</p>
-        <p class="text-xs mt-1">Coming in Step 6</p>
-      </div>
+  {#snippet rightPanel()}
+    <div class="flex-1 flex flex-col items-center justify-center p-8 text-center text-text-muted">
+      <div class="text-4xl mb-4 opacity-20">📋</div>
+      <h2 class="text-base font-medium mb-1">History Panel</h2>
+      <p class="text-sm">Coming in Step 6 (Search, Sort, and list of all your generated codes).</p>
     </div>
-  </main>
-</div>
+  {/snippet}
+</AppShell>
