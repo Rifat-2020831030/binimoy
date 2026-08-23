@@ -19,6 +19,9 @@ class UIState {
   // Generator panel options drawer state
   optionsOpen = $state(false);
 
+  // Mobile pairing modal state
+  pairingOpen = $state(false);
+
   /**
    * Derived state: The filtered and sorted list of history entries.
    * Automatically recalculates when history.entries, searchQuery, sortMode,

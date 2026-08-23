@@ -31,6 +31,14 @@ fn clear_all(pool: State<'_, Arc<DbPool>>) -> Result<(), String> {
     db::clear_all(&pool)
 }
 
+#[tauri::command]
+fn get_network_info() -> Result<String, String> {
+    match local_ip_address::local_ip() {
+        Ok(ip) => Ok(ip.to_string()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -43,7 +51,8 @@ pub fn run() {
             add_entry,
             delete_entry,
             toggle_pin,
-            clear_all
+            clear_all,
+            get_network_info
         ])
         .setup(|app| {
             let app_dir = app.path().app_data_dir().unwrap_or_else(|_| std::env::current_dir().unwrap());
