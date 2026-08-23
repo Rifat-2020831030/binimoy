@@ -13,7 +13,7 @@
    * Auto-updates when the selected history item or its options change.
    */
 
-  let canvasContainer: HTMLDivElement;
+  let canvasContainer = $state<HTMLDivElement | undefined>();
   let hasRendered = $state(false);
 
   // Get the currently selected entry from UI state
@@ -26,8 +26,11 @@
       return;
     }
 
+    // Clear previous render
+    canvasContainer.innerHTML = '';
+
     // Call the async render function
-    qrService.renderQRToDOM(
+    qrService.createQRCode(
       canvasContainer, 
       selectedEntry.url, 
       selectedEntry.options

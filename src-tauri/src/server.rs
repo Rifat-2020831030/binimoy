@@ -1,8 +1,8 @@
 use crate::db::{self, DbPool, QREntry};
 use axum::{
     extract::{Path, State},
-    http::{HeaderValue, StatusCode},
-    routing::{delete, get, post, put},
+    http::StatusCode,
+    routing::{delete, get, put},
     Json, Router,
 };
 use std::sync::Arc;

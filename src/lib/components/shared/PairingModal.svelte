@@ -20,13 +20,29 @@
   let { open, onClose } = $props<Props>();
 
   let localIp = $state<string | null>(null);
-  let canvasContainer: HTMLDivElement;
-  let isLoading = $state(true);
+  let canvasContainer = $state<HTMLDivElement | undefined>();
+  let isLoading = $state(false);
 
   // When modal opens, fetch the IP and generate the QR code
   $effect(() => {
-    if (open && !localIp) {
+    if (open && !localIp && !isLoading) {
       loadNetworkInfo();
+    }
+  });
+
+  // Watch for when the canvas is mounted and localIp is ready
+  $effect(() => {
+    if (localIp && canvasContainer && !isLoading) {
+      const port = 14201;
+      // In a real app, you'd generate a secure token here.
+      const token = 'dev-token-123'; 
+      const connectUrl = `binimoy://connect?ip=${localIp}&port=${port}&token=${token}`;
+      
+      qrService.createQRCode(canvasContainer, connectUrl, {
+        ...DEFAULT_QR_OPTIONS,
+        darkColor: '#2563eb', // Make the pairing QR distinctly blue
+        dotStyle: 'rounded'
+      });
     }
   });
 
@@ -35,25 +51,9 @@
     try {
       const ip = await invoke<string>('get_network_info');
       localIp = ip;
-      
-      // Give the DOM a tick to mount the canvas container if it wasn't there
-      setTimeout(() => {
-        if (canvasContainer && localIp) {
-          const port = 14201;
-          // In a real app, you'd generate a secure token here.
-          const token = 'dev-token-123'; 
-          const connectUrl = `binimoy://connect?ip=${localIp}&port=${port}&token=${token}`;
-          
-          qrService.renderQRToDOM(canvasContainer, connectUrl, {
-            ...DEFAULT_QR_OPTIONS,
-            darkColor: '#2563eb', // Make the pairing QR distinctly blue
-            dotStyle: 'rounded'
-          });
-          isLoading = false;
-        }
-      }, 50);
     } catch (e) {
       console.error('Failed to get local IP', e);
+    } finally {
       isLoading = false;
     }
   }

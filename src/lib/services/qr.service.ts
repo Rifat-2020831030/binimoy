@@ -113,6 +113,23 @@ export async function getQRRawData(
 }
 
 /**
+ * Generates raw image data from URL and Options directly without mounting.
+ * Useful for Copy/Save actions.
+ */
+export async function getQRBlob(
+  data: string,
+  options: QROptions,
+  format: 'png' | 'jpeg' | 'webp' | 'svg' = 'png',
+  size = 1024, // Export larger size by default for better quality
+): Promise<Blob | null> {
+  const QRCodeStyling = await getQRCodeStyling();
+  const qrCode = new QRCodeStyling(buildStylingOptions(data, options, size));
+  const rawData = await qrCode.getRawData(format);
+  if (rawData instanceof Blob) return rawData;
+  return null;
+}
+
+/**
  * Creates a small QR code thumbnail for history list items.
  * Uses minimal options for fast rendering.
  */

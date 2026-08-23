@@ -5,6 +5,9 @@ use db::{DbPool, QREntry};
 use std::sync::Arc;
 use tauri::Manager;
 use tauri::State;
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::TrayIconBuilder;
+use tauri::Emitter;
 
 #[tauri::command]
 fn get_entries(pool: State<'_, Arc<DbPool>>) -> Result<Vec<QREntry>, String> {
@@ -31,8 +34,7 @@ fn clear_all(pool: State<'_, Arc<DbPool>>) -> Result<(), String> {
     db::clear_all(&pool)
 }
 
-use tauri::menu::{Menu, MenuItem};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+
 
 #[tauri::command]
 fn get_network_info() -> Result<String, String> {
@@ -79,7 +81,7 @@ pub fn run() {
             let tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
-                .menu_on_left_click(true)
+                .show_menu_on_left_click(true)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "quit" => {
                         std::process::exit(0);
