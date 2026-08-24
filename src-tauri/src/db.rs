@@ -45,37 +45,39 @@ pub fn init_db(db_path: PathBuf) -> Arc<DbPool> {
     )
     .expect("Failed to create entries table");
 
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )",
+        [],
+    )
+    .expect("Failed to create settings table");
+
     Arc::new(pool)
 }
 
-pub fn get_entries(pool: &DbPool) -> Result<Vec<QREntry>, String> {
+pub fn get_entries(pool: &DbPool, search_query: Option<String>) -> Result<Vec<QREntry>, String> {
     let conn = pool.get().map_err(|e| e.to_string())?;
-    let mut stmt = conn
-        .prepare("SELECT id, url, label, created_at, pinned, options FROM entries ORDER BY created_at DESC")
-        .map_err(|e| e.to_string())?;
+    
+    let mut sql = "SELECT id, url, label, created_at, pinned, options FROM entries".to_string();
+    
+    if let Some(ref q) = search_query {
+        if !q.trim().is_empty() {
+            sql.push_str(" WHERE url LIKE ?1 OR label LIKE ?1");
+        }
+    }
+    
+    sql.push_str(" ORDER BY created_at DESC");
+    
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
 
-    let entries_iter = stmt
-        .query_map([], |row| {
-            let options_str: String = row.get(5)?;
-            let options: QROptions = serde_json::from_str(&options_str).unwrap_or_else(|_| QROptions {
-                errorCorrectionLevel: "M".to_string(),
-                darkColor: "#1c1917".to_string(),
-                lightColor: "#fafaf9".to_string(),
-                margin: 4,
-                dotStyle: "rounded".to_string(),
-                cornersStyle: "extra-rounded".to_string(),
-            });
-
-            Ok(QREntry {
-                id: row.get(0)?,
-                url: row.get(1)?,
-                label: row.get(2)?,
-                createdAt: row.get(3)?,
-                pinned: row.get::<_, i32>(4)? != 0, // SQLite boolean as integer
-                options,
-            })
-        })
-        .map_err(|e| e.to_string())?;
+    let entries_iter = if let Some(q) = search_query.filter(|s| !s.trim().is_empty()) {
+        let like_q = format!("%{}%", q);
+        stmt.query_map(params![like_q], row_to_entry)
+    } else {
+        stmt.query_map([], row_to_entry)
+    }.map_err(|e| e.to_string())?;
 
     let mut entries = Vec::new();
     for entry in entries_iter {
@@ -85,12 +87,33 @@ pub fn get_entries(pool: &DbPool) -> Result<Vec<QREntry>, String> {
     Ok(entries)
 }
 
+fn row_to_entry(row: &rusqlite::Row) -> rusqlite::Result<QREntry> {
+    let options_str: String = row.get(5)?;
+    let options: QROptions = serde_json::from_str(&options_str).unwrap_or_else(|_| QROptions {
+        errorCorrectionLevel: "M".to_string(),
+        darkColor: "#1c1917".to_string(),
+        lightColor: "#fafaf9".to_string(),
+        margin: 4,
+        dotStyle: "rounded".to_string(),
+        cornersStyle: "extra-rounded".to_string(),
+    });
+
+    Ok(QREntry {
+        id: row.get(0)?,
+        url: row.get(1)?,
+        label: row.get(2)?,
+        createdAt: row.get(3)?,
+        pinned: row.get::<_, i32>(4)? != 0, // SQLite boolean as integer
+        options,
+    })
+}
+
 pub fn add_entry(pool: &DbPool, entry: QREntry) -> Result<(), String> {
     let conn = pool.get().map_err(|e| e.to_string())?;
     let options_str = serde_json::to_string(&entry.options).map_err(|e| e.to_string())?;
 
     conn.execute(
-        "INSERT INTO entries (id, url, label, created_at, pinned, options) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        "INSERT OR REPLACE INTO entries (id, url, label, created_at, pinned, options) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         params![
             entry.id,
             entry.url,
@@ -126,5 +149,27 @@ pub fn clear_all(pool: &DbPool) -> Result<(), String> {
     let conn = pool.get().map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM entries", [])
         .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn get_setting(pool: &DbPool, key: &str) -> Option<String> {
+    let conn = pool.get().ok()?;
+    let mut stmt = conn.prepare("SELECT value FROM settings WHERE key = ?1").ok()?;
+    let mut rows = stmt.query(params![key]).ok()?;
+    
+    if let Some(row) = rows.next().ok().flatten() {
+        row.get(0).ok()
+    } else {
+        None
+    }
+}
+
+pub fn set_setting(pool: &DbPool, key: &str, value: &str) -> Result<(), String> {
+    let conn = pool.get().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
+        params![key, value],
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }

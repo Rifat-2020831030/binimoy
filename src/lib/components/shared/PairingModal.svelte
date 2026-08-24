@@ -20,23 +20,22 @@
   let { open, onClose } = $props<Props>();
 
   let localIp = $state<string | null>(null);
+  let pairingToken = $state<string | null>(null);
   let canvasContainer = $state<HTMLDivElement | undefined>();
   let isLoading = $state(false);
 
   // When modal opens, fetch the IP and generate the QR code
   $effect(() => {
-    if (open && !localIp && !isLoading) {
+    if (open && !localIp && !pairingToken && !isLoading) {
       loadNetworkInfo();
     }
   });
 
   // Watch for when the canvas is mounted and localIp is ready
   $effect(() => {
-    if (localIp && canvasContainer && !isLoading) {
+    if (localIp && pairingToken && canvasContainer && !isLoading) {
       const port = 14201;
-      // In a real app, you'd generate a secure token here.
-      const token = 'dev-token-123'; 
-      const connectUrl = `binimoy://connect?ip=${localIp}&port=${port}&token=${token}`;
+      const connectUrl = `binimoy://connect?ip=${localIp}&port=${port}&token=${pairingToken}`;
       
       qrService.createQRCode(canvasContainer, connectUrl, {
         ...DEFAULT_QR_OPTIONS,
@@ -50,7 +49,9 @@
     isLoading = true;
     try {
       const ip = await invoke<string>('get_network_info');
+      const token = await invoke<string>('get_pairing_token');
       localIp = ip;
+      pairingToken = token;
     } catch (e) {
       console.error('Failed to get local IP', e);
     } finally {
@@ -88,10 +89,11 @@
       <div class="flex-1 flex flex-col items-center justify-center p-6 min-h-[250px]">
         {#if isLoading}
           <div class="w-8 h-8 rounded-full border-2 border-text-muted/30 border-t-text-base animate-spin"></div>
-        {:else if localIp}
+        {:else if localIp && pairingToken}
           <div class="bg-surface-0 p-3 rounded-xl shadow-inner mb-4" bind:this={canvasContainer}></div>
-          <div class="bg-surface-2 border border-border px-3 py-1.5 rounded-lg text-xs font-mono text-text-muted">
-            {localIp}:14201
+          <div class="bg-surface-2 border border-border px-4 py-2 rounded-lg text-sm font-mono flex items-center justify-between w-full">
+            <span class="text-text-muted">{localIp}</span>
+            <span class="font-bold tracking-widest text-text-base">PIN: {pairingToken}</span>
           </div>
         {:else}
           <p class="text-error text-sm">Could not detect local network.</p>

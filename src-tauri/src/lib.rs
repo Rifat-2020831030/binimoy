@@ -8,10 +8,16 @@ use tauri::State;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::Emitter;
+use rand::Rng;
 
 #[tauri::command]
 fn get_entries(pool: State<'_, Arc<DbPool>>) -> Result<Vec<QREntry>, String> {
-    db::get_entries(&pool)
+    db::get_entries(&pool, None)
+}
+
+#[tauri::command]
+fn get_pairing_token(token: State<'_, Arc<String>>) -> Result<String, String> {
+    Ok(token.to_string())
 }
 
 #[tauri::command]
@@ -57,7 +63,8 @@ pub fn run() {
             delete_entry,
             toggle_pin,
             clear_all,
-            get_network_info
+            get_network_info,
+            get_pairing_token
         ])
         .setup(|app| {
             let app_dir = app.path().app_data_dir().unwrap_or_else(|_| std::env::current_dir().unwrap());
@@ -66,11 +73,25 @@ pub fn run() {
             let db_path = app_dir.join("binimoy.db");
             let pool = db::init_db(db_path);
             
+            // Load or Generate a persistent 4-digit PIN for pairing from the database
+            let token_str = match db::get_setting(&pool, "pairing_pin") {
+                Some(pin) => pin,
+                None => {
+                    let pin_num: u16 = rand::thread_rng().gen_range(1000..=9999);
+                    let s = pin_num.to_string();
+                    let _ = db::set_setting(&pool, "pairing_pin", &s);
+                    s
+                }
+            };
+            
+            let token = Arc::new(token_str);
+            
             app.manage(pool.clone());
+            app.manage(token.clone());
             
             // Spawn Axum server
             tauri::async_runtime::spawn(async move {
-                server::start_server(pool, 14201).await;
+                server::start_server(pool, 14201, token).await;
             });
 
             // Set up System Tray
