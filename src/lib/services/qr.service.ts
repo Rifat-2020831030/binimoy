@@ -108,7 +108,9 @@ export async function getQRRawData(
   format: 'png' | 'jpeg' | 'webp' | 'svg' = 'png',
 ): Promise<Blob | null> {
   const data = await instance.getRawData(format);
-  if (data instanceof Blob) return data;
+  if (data && typeof (data as any).arrayBuffer === 'function') {
+    return data as Blob;
+  }
   return null;
 }
 
@@ -125,7 +127,9 @@ export async function getQRBlob(
   const QRCodeStyling = await getQRCodeStyling();
   const qrCode = new QRCodeStyling(buildStylingOptions(data, options, size));
   const rawData = await qrCode.getRawData(format);
-  if (rawData instanceof Blob) return rawData;
+  if (rawData && typeof (rawData as any).arrayBuffer === 'function') {
+    return rawData as Blob;
+  }
   return null;
 }
 
