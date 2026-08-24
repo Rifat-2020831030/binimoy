@@ -43,6 +43,22 @@ class HistoryState {
   }
 
   /**
+   * Updates an existing entry.
+   */
+  async update(entry: QREntry) {
+    try {
+      await api.addEntry(entry); // addEntry uses INSERT OR REPLACE
+      const index = this.entries.findIndex(e => e.id === entry.id);
+      if (index !== -1) {
+        this.entries[index] = entry;
+      }
+    } catch (e) {
+      console.error('Failed to update entry:', e);
+      throw e;
+    }
+  }
+
+  /**
    * Deletes an entry by ID.
    */
   async delete(id: string) {

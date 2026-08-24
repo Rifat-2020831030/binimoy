@@ -4,12 +4,15 @@
   import { history } from '$lib/state/history.svelte';
   import { relativeTime } from '$lib/utils/time';
   import { extractDomain, truncate } from '$lib/utils/validate';
+  import { openUrl } from '@tauri-apps/plugin-opener';
+  import { writeText } from '@tauri-apps/plugin-clipboard-manager';
+  import { toaster } from '$lib/state/toast.svelte';
 
   /**
    * HistoryItem
    *
    * A single row in the history list. Shows domain, label, time,
-   * and provides actions for pin/delete.
+   * and provides actions for edit, copy, pin, delete.
    */
 
   interface Props {
@@ -17,7 +20,7 @@
     onDelete: (id: string) => void;
   }
 
-  let { entry, onDelete } = $props<Props>();
+  let { entry, onDelete }: Props = $props();
 
   let isSelected = $derived(ui.selectedId === entry.id);
   
@@ -26,8 +29,70 @@
   // Determine if it's a URL to show a link icon
   let isUrl = $derived(entry.url.startsWith('http'));
 
-  function handleSelect() {
+  let isEditing = $state(false);
+  let editUrl = $state(entry.url);
+  let inputRef = $state<HTMLInputElement | null>(null);
+
+  $effect(() => {
+    if (!isEditing) {
+      editUrl = entry.url;
+    }
+  });
+
+  async function handleSelect() {
     ui.selectedId = entry.id;
+  }
+
+  async function handleOpenBrowser(e: MouseEvent) {
+    e.stopPropagation();
+    if (!isEditing && isUrl) {
+      try {
+        await openUrl(entry.url);
+      } catch (e) {
+        console.error('Failed to open URL', e);
+      }
+    }
+  }
+
+  function startEdit(e: MouseEvent) {
+    e.stopPropagation();
+    isEditing = true;
+    setTimeout(() => inputRef?.focus(), 0);
+  }
+
+  async function saveEdit() {
+    if (!isEditing) return;
+    const trimmed = editUrl.trim();
+    if (trimmed && trimmed !== entry.url) {
+      const updatedEntry = { ...entry, url: trimmed };
+      try {
+        await history.update(updatedEntry);
+      } catch (e) {
+        toaster.error('Failed to update entry');
+      }
+    } else {
+      editUrl = entry.url;
+    }
+    isEditing = false;
+  }
+
+  function handleEditKeydown(e: KeyboardEvent) {
+    if (e.key === 'Enter') {
+      saveEdit();
+    } else if (e.key === 'Escape') {
+      editUrl = entry.url;
+      isEditing = false;
+    }
+  }
+
+  async function handleCopy(e: MouseEvent) {
+    e.stopPropagation();
+    try {
+      await writeText(entry.url);
+      toaster.success('Link copied');
+    } catch (err) {
+      toaster.error('Failed to copy link');
+    }
   }
 
   function handleTogglePin(e: MouseEvent) {
@@ -52,8 +117,15 @@
 >
   <div class="flex items-center gap-4 min-w-0 flex-1">
     <!-- Icon -->
-    <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm
-      {isSelected ? 'bg-text-base text-surface-0' : 'bg-surface-2 text-text-muted'} transition-colors">
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm transition-colors
+      {isSelected ? 'bg-text-base text-surface-0' : 'bg-surface-2 text-text-muted'}
+      {isUrl ? 'cursor-pointer hover:opacity-80' : ''}"
+      onclick={isUrl ? handleOpenBrowser : undefined}
+      role={isUrl ? 'button' : 'img'}
+      aria-label={isUrl ? 'Open link in browser' : undefined}
+    >
       {#if isUrl}
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
       {:else}
@@ -62,20 +134,50 @@
     </div>
 
     <!-- Details -->
-    <div class="flex flex-col min-w-0">
-      <div class="flex items-center gap-2">
-        <span class="font-medium text-sm text-text-base truncate">{displayTitle}</span>
-        {#if entry.pinned}
-          <svg class="w-3.5 h-3.5 text-warning shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/></svg>
-        {/if}
-      </div>
-      <span class="text-xs text-text-muted truncate mt-0.5 font-mono">{truncate(entry.url, 50)}</span>
+    <div class="flex flex-col min-w-0 w-full pr-2">
+      {#if isEditing}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="w-full flex" onclick={(e) => e.stopPropagation()}>
+          <input
+            bind:this={inputRef}
+            type="text"
+            bind:value={editUrl}
+            onkeydown={handleEditKeydown}
+            onblur={saveEdit}
+            class="w-full bg-surface-3 text-sm text-text-base px-2 py-1 rounded border border-primary outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+      {:else}
+        <div class="flex items-center gap-2">
+          <span class="font-medium text-sm text-text-base truncate">{displayTitle}</span>
+          {#if entry.pinned}
+            <svg class="w-3.5 h-3.5 text-warning shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/></svg>
+          {/if}
+        </div>
+        <span class="text-xs text-text-muted truncate mt-0.5 font-mono">{truncate(entry.url, 50)}</span>
+      {/if}
     </div>
   </div>
 
   <!-- Actions & Time -->
-  <div class="flex items-center gap-4 pl-4 shrink-0">
+  <div class="flex items-center gap-4 pl-2 shrink-0">
     <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <button 
+        class="p-1.5 text-text-muted hover:text-primary hover:bg-surface-3 rounded-md transition-colors outline-none focus-visible:ring-2"
+        onclick={startEdit}
+        title="Edit"
+        aria-label="Edit"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+      </button>
+      <button 
+        class="p-1.5 text-text-muted hover:text-primary hover:bg-surface-3 rounded-md transition-colors outline-none focus-visible:ring-2"
+        onclick={handleCopy}
+        title="Copy"
+        aria-label="Copy"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+      </button>
       <button 
         class="p-1.5 text-text-muted hover:text-warning hover:bg-surface-3 rounded-md transition-colors outline-none focus-visible:ring-2"
         onclick={handleTogglePin}
