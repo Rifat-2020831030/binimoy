@@ -1,4 +1,4 @@
-import type { FilterMode, QREntry, SortMode } from '$lib/types';
+import { DEFAULT_QR_OPTIONS, type FilterMode, type QREntry, type SortMode, type QROptions } from '$lib/types';
 import { history } from './history.svelte';
 
 /**
@@ -18,6 +18,7 @@ class UIState {
 
   // Generator panel options drawer state
   optionsOpen = $state(false);
+  globalOptions = $state<QROptions>({ ...DEFAULT_QR_OPTIONS });
 
   // Mobile pairing modal state
   pairingOpen = $state(false);

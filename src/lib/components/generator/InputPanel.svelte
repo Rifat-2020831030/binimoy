@@ -39,7 +39,7 @@
         label: customLabel.trim() || undefined,
         createdAt: Date.now(),
         pinned: false,
-        options: { ...DEFAULT_QR_OPTIONS }
+        options: { ...ui.globalOptions }
       };
 
       await history.add(entry);

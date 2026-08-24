@@ -37,29 +37,21 @@
   ];
 
   let selectedEntry = $derived(history.entries.find(e => e.id === ui.selectedId));
+  let currentOptions = $derived(selectedEntry ? selectedEntry.options : ui.globalOptions);
 
-  // Update a specific option field and persist it immediately
+  // Update a specific option field and persist it immediately if an entry is selected
   async function updateOption<K extends keyof QROptions>(key: K, value: QROptions[K]) {
-    if (!selectedEntry) return;
-
-    // We mutate the entry in the history state for an instant UI update
-    selectedEntry.options[key] = value;
-
-    // Then we fire a background save to the database by re-saving the entry.
-    // (Note: in a production app with SQLite, we might write a specific `updateOptions` API.
-    // For now, we can just use `addEntry` to overwrite it, or create a specific update).
-    // Let's use `addEntry` which does an UPSERT in standard DBs, but wait, our DB insert doesn't upsert.
-    // I need to add an update method to the API if I want to save edits, or just wait for the user to generate.
-    // Wait, the plan was to allow editing. I'll add an update call, or just let `addEntry` act as an update if we modify the Rust backend.
-    // Actually, I'll delete and re-add for now to keep it simple, or just add it (SQLite throws on primary key violation unless we use REPLACE).
-    // Let's assume we'll just save it. I'll use a `save` wrapper.
-    try {
-      // Temporary optimistic save to UI. Real persistence would need a PUT endpoint/command.
-      // Assuming api.addEntry in Rust can be modified to `INSERT OR REPLACE`.
-      await api.addEntry(selectedEntry);
-    } catch (e) {
-      console.error('Failed to save options', e);
-      // Silent fail on auto-save to avoid spamming toasts
+    if (selectedEntry) {
+      selectedEntry.options[key] = value;
+      try {
+        // SQLite backend uses INSERT OR REPLACE so this acts as an upsert
+        await api.addEntry(selectedEntry);
+      } catch (e) {
+        console.error('Failed to save options', e);
+      }
+    } else {
+      // Update global defaults for the next generated QR code
+      ui.globalOptions[key] = value;
     }
   }
 </script>
@@ -91,20 +83,19 @@
   <!-- Drawer Body -->
   {#if ui.optionsOpen}
     <div transition:slide={{ duration: 200 }} class="border-t border-border bg-surface-0">
-      {#if selectedEntry}
         <div class="p-4 flex flex-col gap-5">
           <!-- Colors -->
           <div class="grid grid-cols-2 gap-4">
             <ColorPicker
               id="color-dark"
               label="Foreground Color"
-              value={selectedEntry.options.darkColor}
+              value={currentOptions.darkColor}
               onChange={(v) => updateOption('darkColor', v)}
             />
             <ColorPicker
               id="color-light"
               label="Background Color"
-              value={selectedEntry.options.lightColor}
+              value={currentOptions.lightColor}
               onChange={(v) => updateOption('lightColor', v)}
             />
           </div>
@@ -114,7 +105,7 @@
             <label class="text-xs font-medium text-text-muted">Dot Style</label>
             <SegmentedControl 
               options={dotOptions} 
-              selected={selectedEntry.options.dotStyle} 
+              selected={currentOptions.dotStyle} 
               onChange={(v) => updateOption('dotStyle', v)} 
             />
           </div>
@@ -123,7 +114,7 @@
             <label class="text-xs font-medium text-text-muted">Corner Style</label>
             <SegmentedControl 
               options={cornerOptions} 
-              selected={selectedEntry.options.cornersStyle} 
+              selected={currentOptions.cornersStyle} 
               onChange={(v) => updateOption('cornersStyle', v)} 
             />
           </div>
@@ -134,7 +125,7 @@
               <label class="text-xs font-medium text-text-muted">Error Correction</label>
               <SegmentedControl 
                 options={errorOptions} 
-                selected={selectedEntry.options.errorCorrectionLevel} 
+                selected={currentOptions.errorCorrectionLevel} 
                 onChange={(v) => updateOption('errorCorrectionLevel', v)} 
                 size="sm"
               />
@@ -143,7 +134,7 @@
             <div class="flex flex-col gap-1.5">
               <label for="margin-range" class="flex justify-between text-xs font-medium text-text-muted">
                 <span>Padding</span>
-                <span>{selectedEntry.options.margin}px</span>
+                <span>{currentOptions.margin}px</span>
               </label>
               <input 
                 id="margin-range"
@@ -151,18 +142,13 @@
                 min="0" 
                 max="20" 
                 step="1" 
-                value={selectedEntry.options.margin}
+                value={currentOptions.margin}
                 oninput={(e) => updateOption('margin', parseInt((e.target as HTMLInputElement).value))}
                 class="w-full accent-text-base h-1.5 bg-surface-2 rounded-lg appearance-none cursor-pointer mt-2" 
               />
             </div>
           </div>
         </div>
-      {:else}
-        <div class="p-6 text-center text-sm text-text-muted">
-          Generate or select a QR code to customize it.
-        </div>
-      {/if}
     </div>
   {/if}
 </div>
