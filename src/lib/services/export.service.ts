@@ -5,9 +5,10 @@
  * copying PNG to system clipboard, and exporting history as JSON.
  */
 
-import { save } from '@tauri-apps/plugin-dialog';
-import { writeFile, writeTextFile } from '@tauri-apps/plugin-fs';
+import { save, open } from '@tauri-apps/plugin-dialog';
+import { writeFile, writeTextFile, readTextFile } from '@tauri-apps/plugin-fs';
 import { writeImage } from '@tauri-apps/plugin-clipboard-manager';
+import type { QREntry } from '$lib/types';
 
 // ============================================================
 // Blob helpers
@@ -95,4 +96,27 @@ export async function saveJSON(jsonContent: string, suggestedName = 'binimoy-his
 
   await writeTextFile(path, jsonContent);
   return true;
+}
+
+/**
+ * Opens a native open dialog and reads a JSON file from disk.
+ *
+ * @returns Array of QREntry or null if user cancelled
+ */
+export async function importJSON(): Promise<QREntry[] | null> {
+  const selected = await open({
+    title: 'Import History from JSON',
+    filters: [{ name: 'JSON File', extensions: ['json'] }],
+    multiple: false,
+  });
+
+  if (!selected) return null;
+
+  const content = await readTextFile(selected as string);
+  const data = JSON.parse(content);
+  if (data.app === 'Binimoy' && Array.isArray(data.entries)) {
+    return data.entries;
+  }
+  
+  throw new Error('Invalid import file format.');
 }
